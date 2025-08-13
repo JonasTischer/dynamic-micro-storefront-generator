@@ -21,7 +21,7 @@ import {
 import { Loader } from '@/components/ai-elements/loader';
 import { Suggestions, Suggestion } from '@/components/ai-elements/suggestion';
 import { CodeBlock, CodeBlockCopyButton } from '@/components/ai-elements/code-block';
-import { Maximize2, Rocket, Zap, TrendingUp, ExternalLink, X, Code2, ChevronRight, File, Folder, Eye, Image } from 'lucide-react';
+import { Maximize2, Rocket, Zap, TrendingUp, ExternalLink, X, Code2, ChevronRight, File, Folder, Eye, Image, RefreshCw, Wand2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   ResizableHandle,
@@ -67,6 +67,9 @@ export default function Home() {
   const [showDeployModal, setShowDeployModal] = useState(false);
   const [showCodeView, setShowCodeView] = useState(false);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [showImageRegenModal, setShowImageRegenModal] = useState(false);
+  const [imageRegenPrompt, setImageRegenPrompt] = useState('');
+  const [isRegeneratingImage, setIsRegeneratingImage] = useState(false);
   const [deployConfig, setDeployConfig] = useState({
     stripePublishableKey: '',
     stripeSecretKey: '',
@@ -168,6 +171,49 @@ export default function Home() {
       console.error('Deployment failed:', error);
       alert('❌ Deployment failed. Please try again.');
     }
+  };
+
+  const handleRegenerateImage = async () => {
+    if (!selectedFile || !imageRegenPrompt.trim()) {
+      alert('Please enter a prompt for the new image');
+      return;
+    }
+
+    setIsRegeneratingImage(true);
+    
+    try {
+      // TODO: Implement actual image generation API call
+      console.log(`Regenerating image for ${selectedFile} with prompt: ${imageRegenPrompt}`);
+      
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      alert('🎨 Image regenerated successfully! (Demo mode - actual API integration needed)');
+      
+      setShowImageRegenModal(false);
+      setImageRegenPrompt('');
+    } catch (error) {
+      console.error('Image regeneration failed:', error);
+      alert('❌ Image regeneration failed. Please try again.');
+    } finally {
+      setIsRegeneratingImage(false);
+    }
+  };
+
+  const openImageRegenModal = (fileName: string) => {
+    const smartPrompt = generateImagePrompt(fileName);
+    setImageRegenPrompt(smartPrompt);
+    setShowImageRegenModal(true);
+  };
+
+  const generateImagePrompt = (fileName: string): string => {
+    const name = fileName.toLowerCase();
+    if (name.includes('bracelet')) return 'Colorful friendship bracelets with beads, Taylor Swift era themes, professional product photography';
+    if (name.includes('poster')) return 'Concert tour poster with sparkly holographic effects, modern design';
+    if (name.includes('vinyl')) return 'Vinyl record with artistic cover design, professional studio lighting';
+    if (name.includes('tote')) return 'Canvas tote bag with trendy graphics, lifestyle product photography';
+    if (name.includes('sunglasses')) return 'Heart-shaped sunglasses in pastel colors, fashion accessory photography';
+    return 'High-quality product photography with professional lighting, clean background';
   };
 
   // Helper function to build file tree from flat file list
@@ -583,7 +629,7 @@ export default function Home() {
                       } else {
                         // Show code block
                         return (
-                          <CodeBlock code={file.content || file.source || ''} language={file.lang || 'jsx'}>
+                          <CodeBlock code={file.content || file.source || ''} language={file.lang || 'jsx'} showLineNumbers={true}>
                             <CodeBlockCopyButton
                               onCopy={() => console.log(`Copied ${selectedFile} to clipboard`)}
                               onError={() => console.error(`Failed to copy ${selectedFile} to clipboard`)}

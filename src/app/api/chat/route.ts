@@ -8,11 +8,12 @@ Build a single-page Next.js store with:
 - Simple product grid showing 4-6 items with prices
 - No need to add things like "Add to favorites" or "Add to cart"
 - Quick "Buy Now" buttons for each product
-- The "Buy Now" button should open and link to an actual stripe checkout page
-- Minimal navigation (just logo and cart)
+- The "Buy Now" button should open a modal with a checkout form ( the pay function can be mocked )
+- Minimal navigation (just logo and no cart)
 - Mobile-first responsive design
 - Trendy colors and bold typography
-- Social sharing buttons
+- No social sharing buttons or testimonials
+- Images are important, make sure to create all the images you need and don't use placeholder images
 
 Focus on: Simple, fast, impulse-buy experience. No complex menus or pages.`;
 
@@ -39,6 +40,11 @@ Create a ${message}. Use Tailwind CSS and modern React components.`;
       chat = await v0.chats.sendMessage({
         chatId: chatId,
         message: enhancedMessage,
+        modelConfiguration: {
+          modelId: 'v0-gpt-5',
+          imageGenerations: true,
+          thinking: false,
+        },
       });
     } else {
       // create new chat
