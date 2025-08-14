@@ -3,7 +3,24 @@ import { v0 } from 'v0-sdk';
 
 export async function POST(request: NextRequest) {
   try {
-    const { message, chatId, attachments = [] } = await request.json();
+    const contentType = request.headers.get('content-type') || '';
+
+    let message: string | null = null;
+    let chatId: string | null = null;
+    let attachments: any[] = [];
+
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await request.formData();
+      message = (formData.get('message') as string) || '';
+      chatId = (formData.get('chatId') as string) || null;
+      const files = formData.getAll('files') as File[];
+      attachments = files.map((file) => ({ file }));
+    } else {
+      const body = await request.json();
+      message = body.message;
+      chatId = body.chatId || null;
+      attachments = body.attachments || [];
+    }
 
     if (!message && attachments.length === 0) {
       return NextResponse.json(
@@ -16,17 +33,17 @@ export async function POST(request: NextRequest) {
 
     // Add attachment information and generate products if attachments exist
     if (attachments.length > 0) {
-      // Generate product catalogue from the first attachment
       const firstAttachment = attachments[0];
-      const catalogue = await generateProductCatalogueFromImage(firstAttachment);
+      const input = firstAttachment?.file || firstAttachment;
+      const catalogue = await generateProductCatalogueFromImage(input);
 
       if (catalogue) {
         // Transform catalogue to the desired format and create a readable string for LLM
         catalogueData = `<PRODUCT_CATALOGUE>
-${catalogue.products.map((product, index) =>
+${catalogue.products.map((product: any, index: number) =>
   `<PRODUCT id="${index + 1}">
 <NAME>${product.name}</NAME>
-<DESCRIPTION>${product.desc}</DESCRIPTION>
+<DESCRIPTION>${product.description}</DESCRIPTION>
 <IMAGE_URL>${product.imageUrl || 'No image available'}</IMAGE_URL>
 </PRODUCT>`
 ).join('\n')}
@@ -56,11 +73,13 @@ Now, create the store for: ${message}.`;
 
     let chat;
 
+    const userMessage: string = message ?? '';
+
     if (chatId) {
       // continue existing chat
       chat = await v0.chats.sendMessage({
-        chatId: chatId,
-        message: message,
+        chatId: chatId as string,
+        message: userMessage,
         modelConfiguration: {
           modelId: 'v0-gpt-5',
           imageGenerations: false,
@@ -102,7 +121,7 @@ Now, create the store for: ${message}.`;
 }
 
 
-async function generateProductCatalogueFromImage(attachment: any): Promise<any | null> {
+async function generateProductCatalogueFromImage(_attachment: any): Promise<any | null> {
   // Mock data for now
   return {
     products: [

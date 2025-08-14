@@ -22,6 +22,7 @@ interface Attachment {
   url: string;
   name: string;
   contentType: string;
+  file?: File;
 }
 
 interface ChatFile {
@@ -73,19 +74,35 @@ export default function Home() {
     setChatHistory((prev) => [...prev, { type: 'user', content: userMessage }]);
 
     try {
-      const requestBody = {
-        message: userMessage,
-        chatId: currentChat?.id,
-        attachments: attachments
-      };
+      const hasFiles = attachments.length > 0 && attachments.some(a => a.file);
+      let response: Response;
 
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
+      if (hasFiles) {
+        const formData = new FormData();
+        formData.append('message', userMessage);
+        if (currentChat?.id) formData.append('chatId', currentChat.id);
+        attachments.forEach(att => {
+          if (att.file) {
+            formData.append('files', att.file, att.name);
+          }
+        });
+
+        response = await fetch('/api/chat', {
+          method: 'POST',
+          body: formData,
+        });
+      } else {
+        const requestBody = {
+          message: userMessage,
+          chatId: currentChat?.id,
+          attachments: attachments,
+        };
+        response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody),
+        });
+      }
 
       if (!response.ok) {
         throw new Error('Failed to create chat');

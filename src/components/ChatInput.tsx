@@ -8,6 +8,7 @@ interface Attachment {
   url: string;
   name: string;
   contentType: string;
+  file?: File;
 }
 
 interface ChatInputProps {
@@ -34,31 +35,26 @@ export function ChatInput({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadQueue, setUploadQueue] = useState<string[]>([]);
 
-  const uploadFile = async (file: File): Promise<Attachment | null> => {
-    const formData = new FormData();
-    formData.append('file', file);
+  const readFileAsDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
 
+  const processFileInMemory = async (file: File): Promise<Attachment | null> => {
     try {
-      const response = await fetch('/api/files/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        return {
-          url: data.url,
-          name: data.name || file.name,
-          contentType: data.contentType || file.type,
-        };
-      } else {
-        const error = await response.json();
-        toast.error(error.message || 'Failed to upload file');
-        return null;
-      }
+      const dataUrl = await readFileAsDataUrl(file);
+      return {
+        url: dataUrl,
+        name: file.name,
+        contentType: file.type,
+        file,
+      };
     } catch (error) {
-      console.error('Upload error:', error);
-      toast.error('Failed to upload file');
+      console.error('File processing error:', error);
+      toast.error('Failed to process file');
       return null;
     }
   };
@@ -66,7 +62,7 @@ export function ChatInput({
   const handleFileChange = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
       const files = Array.from(event.target.files || []);
-      
+
       // Filter for images only
       const imageFiles = files.filter(file => file.type.startsWith('image/'));
       if (imageFiles.length !== files.length) {
@@ -78,14 +74,14 @@ export function ChatInput({
       setUploadQueue(imageFiles.map(file => file.name));
 
       try {
-        const uploadPromises = imageFiles.map(uploadFile);
+        const uploadPromises = imageFiles.map(processFileInMemory);
         const results = await Promise.all(uploadPromises);
         const successfulUploads = results.filter((result): result is Attachment => result !== null);
 
         setAttachments([...attachments, ...successfulUploads]);
       } catch (error) {
         console.error('Error uploading files:', error);
-        toast.error('Some files failed to upload');
+        toast.error('Some files failed to process');
       } finally {
         setUploadQueue([]);
         if (fileInputRef.current) {
@@ -140,7 +136,7 @@ export function ChatInput({
               </Button>
             </div>
           ))}
-          
+
           {uploadQueue.map((filename) => (
             <div
               key={filename}
@@ -163,7 +159,7 @@ export function ChatInput({
           placeholder={placeholder}
           className="pr-20 min-h-[60px]"
         />
-        
+
         <div className="absolute bottom-1 right-1 flex items-center gap-1">
           <Button
             type="button"
@@ -175,7 +171,7 @@ export function ChatInput({
           >
             <PaperclipIcon className="h-4 w-4" />
           </Button>
-          
+
           <PromptInputSubmit
             className="h-8 w-8 p-0"
             disabled={!message.trim() && attachments.length === 0}
