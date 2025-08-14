@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { v0 } from 'v0-sdk';
 
-const STORE_SYSTEM_PROMPT = `Create a viral pop-up store landing page.
+const STORE_SYSTEM_PROMPT = `You are a Shopify expert. Create a viral pop-up store landing page.
 
 Build a single-page Next.js store with:
 - Eye-catching hero section with trend-themed design
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const enhancedMessage = `${STORE_SYSTEM_PROMPT}
+    const userMessage = `
 
 Create a ${message}. Use Tailwind CSS and modern React components.`;
 
@@ -39,7 +39,7 @@ Create a ${message}. Use Tailwind CSS and modern React components.`;
       // continue existing chat
       chat = await v0.chats.sendMessage({
         chatId: chatId,
-        message: enhancedMessage,
+        message: userMessage,
         modelConfiguration: {
           modelId: 'v0-gpt-5',
           imageGenerations: true,
@@ -49,7 +49,8 @@ Create a ${message}. Use Tailwind CSS and modern React components.`;
     } else {
       // create new chat
       chat = await v0.chats.create({
-        message: enhancedMessage,
+        system: STORE_SYSTEM_PROMPT,
+        message: userMessage,
         modelConfiguration: {
         modelId: 'v0-gpt-5',
         imageGenerations: true,
