@@ -58,14 +58,18 @@ export async function POST(request: NextRequest) {
       await writeFile(filePath, buffer);
     }
 
-    const fileUrl = `/uploads/${uniqueFileName}`;
+    const fileUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/uploads/${uniqueFileName}`;
+
+    // Simple upload - products will be generated when user sends the message
+    console.log(`📁 File uploaded successfully: ${uniqueFileName}`);
 
     return NextResponse.json({
       message: 'File uploaded successfully',
       url: fileUrl,
       name: file.name,
       contentType: file.type,
-      size: file.size
+      size: file.size,
+      ready: true // Ready for product generation when message is sent
     });
 
   } catch (error) {
@@ -76,3 +80,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+

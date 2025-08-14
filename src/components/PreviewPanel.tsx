@@ -71,7 +71,7 @@ export function PreviewPanel({
               value={demoUrl}
             />
             <div className="flex items-center gap-2">
-              {files.length > 0 && (
+              {demoUrl && (
                 <Button
                   variant="ghost"
                   size="sm"

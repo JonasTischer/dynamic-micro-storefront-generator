@@ -12,6 +12,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    let catalogueData = null;
+
+    // Add attachment information and generate products if attachments exist
+    if (attachments.length > 0) {
+      // Generate product catalogue from the first attachment
+      const firstAttachment = attachments[0];
+      const catalogue = await generateProductCatalogueFromImage(firstAttachment);
+
+      if (catalogue) {
+        // Transform catalogue to the desired format and create a readable string for LLM
+        catalogueData = `<PRODUCT_CATALOGUE>
+${catalogue.products.map((product, index) =>
+  `<PRODUCT id="${index + 1}">
+<NAME>${product.name}</NAME>
+<DESCRIPTION>${product.desc}</DESCRIPTION>
+<IMAGE_URL>${product.imageUrl || 'No image available'}</IMAGE_URL>
+</PRODUCT>`
+).join('\n')}
+</PRODUCT_CATALOGUE>`;
+      }
+    }
+
     const ENHANCED_USER_PROMPT = `You are a Shopify expert. Create a viral pop-up store landing page.
 
 Build a single-page Next.js store with:
@@ -28,17 +50,9 @@ Build a single-page Next.js store with:
 
 Focus on: Simple, fast, impulse-buy experience. No complex menus or pages.
 
+Here is the catalogue of products: ${catalogueData}.
+
 Now, create the store for: ${message}.`;
-
-    let userMessage = `
-
-    Create a store for the following message: ${message}.`;
-
-    // Add attachment information to the message if attachments exist
-    if (attachments.length > 0) {
-      const attachmentInfo = attachments.map((att: any) => `- ${att.name} (${att.contentType}): ${att.url}`).join('\n');
-      userMessage += `\n\nAttached images for inspiration:\n${attachmentInfo}\n\nPlease use these images as inspiration for the store design and product selection.`;
-    }
 
     let chat;
 
@@ -46,7 +60,7 @@ Now, create the store for: ${message}.`;
       // continue existing chat
       chat = await v0.chats.sendMessage({
         chatId: chatId,
-        message: userMessage,
+        message: message,
         modelConfiguration: {
           modelId: 'v0-gpt-5',
           imageGenerations: false,
@@ -85,4 +99,39 @@ Now, create the store for: ${message}.`;
       { status: 500 },
     );
   }
+}
+
+
+async function generateProductCatalogueFromImage(attachment: any): Promise<any | null> {
+  // Mock data for now
+  return {
+    products: [
+      {
+        id: '1',
+        name: 'Premium Sneakers',
+        price: 129.99,
+        description: 'High-quality athletic footwear with modern design',
+        category: 'Footwear',
+        imageUrl: '/mock-sneaker.jpg'
+      },
+      {
+        id: '2',
+        name: 'Vintage Jacket',
+        price: 89.99,
+        description: 'Stylish vintage-inspired outerwear',
+        category: 'Clothing',
+        imageUrl: '/mock-jacket.jpg'
+      },
+      {
+        id: '3',
+        name: 'Smart Watch',
+        price: 199.99,
+        description: 'Advanced fitness tracking and notifications',
+        category: 'Electronics',
+        imageUrl: '/mock-watch.jpg'
+      }
+    ],
+    totalProducts: 3,
+    categories: ['Footwear', 'Clothing', 'Electronics']
+  };
 }
