@@ -62,7 +62,8 @@ Build a single-page Next.js store with:
 - Minimal navigation (just logo and NO Shopping cart)
 - Mobile-first responsive design
 - Trendy colors and bold typography
-- No social sharing buttons or testimonials
+- No testimonials
+- Social sharing buttons
 - Images are important, make sure to create all the images you need and don't use placeholder images
 
 Focus on: Simple, fast, impulse-buy experience. No complex menus or pages.
