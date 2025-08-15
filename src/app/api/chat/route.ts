@@ -4,6 +4,8 @@ import Replicate from 'replicate';
 import { openai } from '@ai-sdk/openai';
 import { generateObject } from 'ai';
 import { z } from 'zod';
+import { createOpenRouter } from '@openrouter/ai-sdk-provider';
+import { UTApi } from "uploadthing/server";
 
 export async function POST(request: NextRequest) {
   try {
@@ -41,17 +43,14 @@ export async function POST(request: NextRequest) {
       const firstAttachment = attachments[0];
       const input = firstAttachment?.file || firstAttachment;
       console.log('🔄 [ChatAPI] Calling generateProductCatalogueFromImage...');
-      
+
       const catalogue = await generateProductCatalogueFromImage(message!, input);
-      console.log('📋 [ChatAPI] Received catalogue:', catalogue ? 'SUCCESS' : 'NULL');
-
-
-
+      console.log('📋 [ChatAPI] Received catalogue:', catalogue);
 
 
       if (catalogue && catalogue.products && catalogue.products.length > 0) {
         console.log('✅ [ChatAPI] Transforming catalogue with', catalogue.products.length, 'products');
-        
+
         // Transform catalogue to the desired format and create a readable string for LLM
         catalogueData = `<PRODUCT_CATALOGUE>
 ${catalogue.products.map((product: any, index: number) =>
@@ -64,7 +63,7 @@ ${catalogue.products.map((product: any, index: number) =>
 </PRODUCT>`
         ).join('\n')}
 </PRODUCT_CATALOGUE>`;
-        
+
         console.log('📄 [ChatAPI] Catalogue data prepared for LLM (', catalogueData.length, 'chars)');
       } else {
         console.warn('⚠️ [ChatAPI] No valid catalogue received - proceeding without product data');
@@ -141,30 +140,37 @@ Now, create the store for: ${message}.`;
   }
 }
 
-
 async function generateProductCatalogueFromImage(userInput: string, attachment: any): Promise<any | null> {
-  console.log('🏪 [ProductCatalogue] Starting product catalogue generation');
-  console.log('📝 [ProductCatalogue] User input:', userInput);
-  console.log('📎 [ProductCatalogue] Attachment type:', typeof attachment, attachment?.constructor?.name);
-
-  const replicate = new Replicate({
-    auth: process.env.REPLICATE_API_KEY,
-  });
-
   try {
-    // Convert file to base64 if it's a File object
-    let imageData = null;
-    if (attachment?.file && typeof attachment.file.arrayBuffer === 'function') {
-      console.log('🖼️ [ProductCatalogue] Converting file to base64, type:', attachment.file.type);
-      const buffer = await attachment.file.arrayBuffer();
-      const base64 = Buffer.from(buffer).toString('base64');
-      imageData = `data:${attachment.file.type};base64,${base64}`;
-      console.log('✅ [ProductCatalogue] File converted to base64, size:', base64.length, 'chars');
+    console.log('Starting product catalogue generation');
+    console.log('User input:', userInput);
+    console.log('Attachment:', attachment ? 'present' : 'not present');
+
+    const openrouter = createOpenRouter({
+      apiKey: process.env.OPENROUTER_API_KEY,
+    });
+
+    const replicate = new Replicate({
+      auth: process.env.REPLICATE_API_KEY,
+    });
+
+    let imageUrl = null;
+    // The attachment could be either { file: File } or File directly
+    const file = attachment?.file || attachment;
+
+    if (file && typeof file.arrayBuffer === 'function') {
+      console.log('Uploading file to UploadThing...');
+      const utapi = new UTApi();
+      const response = await utapi.uploadFiles([file]);
+      if (response[0].data) {
+        imageUrl = response[0].data.url;
+        console.log('File uploaded successfully:', imageUrl);
+      }
+    } else {
+      console.log('Attachment is not a file:', attachment);
+      return null;
     }
 
-    // Use GPT-5 to generate product catalog based on user prompt and image
-    console.log('🤖 [ProductCatalogue] Using GPT-5 to generate product catalog...');
-    
     const productSchema = z.object({
       products: z.array(z.object({
         name: z.string().describe('Product name'),
@@ -174,172 +180,77 @@ async function generateProductCatalogueFromImage(userInput: string, attachment: 
       }))
     });
 
-    const prompt = imageData 
-      ? `Based on this user request: "${userInput}" and the provided image, create a product catalog. The user will specify how many products they want in their request (if they don't specify a number, create exactly 1 product). Generate creative product ideas that match their vision. Focus on products that can be personalized or customized.`
+    const prompt = imageUrl
+      ? `Based on this user request: "${userInput}" and the provided image, create a product catalog for merchandise/products that incorporate or feature the uploaded image. The user will specify how many products they want in their request (if they don't specify a number, create exactly 1 product). Generate creative product ideas like mugs, t-shirts, posters, phone cases, etc. that can showcase the uploaded image. For the imagePrompt field, describe how to transform or incorporate the uploaded image into each product (e.g., "Transform this into a cartoon style mug design", "Make this image into a vintage t-shirt print", "Create a minimalist poster version of this image").`
       : `Based on this user request: "${userInput}", create a product catalog. The user will specify how many products they want in their request (if they don't specify a number, create exactly 1 product). Generate creative product ideas that match their vision. Focus on products that can be personalized or customized.`;
 
+    console.log('Generating product catalog with AI... with prompt:', prompt);
     let catalogResult;
-    if (imageData) {
-      catalogResult = await generateObject({
-        model: openai('gpt-5'),
-        schema: productSchema,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: prompt }
-            ]
-          }
-        ]
-      });
-    } else {
-      catalogResult = await generateObject({
-        model: openai('gpt-5'),
-        schema: productSchema,
-        prompt
-      });
-    }
+    catalogResult = await generateObject({
+      model: openai('gpt-4.1'),
+      schema: productSchema,
+      prompt: prompt
+    });
 
-    console.log('✅ [ProductCatalogue] GPT-5 generated', catalogResult.object.products.length, 'products');
+    console.log('Product catalog generated:', catalogResult.object.products.length, 'products');
 
     const products = [];
-    
-    console.log('🛍️ [ProductCatalogue] Processing', catalogResult.object.products.length, 'products for image generation');
 
-    // Generate images for each product using Replicate with FLUX-kontext-pro
-    for (let i = 0; i < catalogResult.object.products.length; i++) {
-      const product = catalogResult.object.products[i];
-      console.log(`🎨 [ProductCatalogue] Generating image ${i + 1}/${catalogResult.object.products.length} for:`, product.name);
-      
-      try {
-        // Generate product image using FLUX-kontext-pro model
-        const imageOutput = await replicate.run(
-          "fofr/flux-kontext-pro",
-          {
-            input: {
-              prompt: `${product.imagePrompt}, professional product photography, white background, studio lighting, high quality, commercial photography, clean minimalist style`,
-              num_outputs: 1,
-              aspect_ratio: "1:1",
-              output_format: "webp",
-              output_quality: 90
-            }
+    for (const product of catalogResult.object.products) {
+      console.log('Generating image for product:', product.name);
+      let imageOutput;
+
+      console.log('Image url:', imageUrl);
+
+      imageOutput = await replicate.run(
+        "black-forest-labs/flux-kontext-pro",
+        {
+          input: {
+            prompt: `${product.imagePrompt}, professional product photography, white background, studio lighting, high quality, commercial photography, clean minimalist style`,
+            input_image: imageUrl,
+            aspect_ratio: "1:1",
+            output_format: "jpg",
+            safety_tolerance: 2,
+            prompt_upsampling: false
           }
-        );
-
-        // Extract URL from the response
-        let imageUrl = '/placeholder-product.jpg';
-        if (Array.isArray(imageOutput) && imageOutput.length > 0) {
-          imageUrl = imageOutput[0];
-        } else if (typeof imageOutput === 'string') {
-          imageUrl = imageOutput;
-        } else if (imageOutput && typeof imageOutput === 'object') {
-          imageUrl = (imageOutput as any).url || (imageOutput as any).data || '/placeholder-product.jpg';
         }
-        
-        console.log(`✅ [ProductCatalogue] Image generated successfully for ${product.name}:`, typeof imageUrl, imageUrl?.substring?.(0, 100));
+      );
 
-        products.push({
-          id: (i + 1).toString(),
-          name: product.name,
-          price: product.estimatedPrice,
-          description: product.description,
-          imageUrl: imageUrl
-        });
-      } catch (imageError) {
-        console.error(`❌ [ProductCatalogue] Failed to generate image for product ${i + 1}:`, imageError);
-        
-        products.push({
-          id: (i + 1).toString(),
-          name: product.name,
-          price: product.estimatedPrice,
-          description: product.description,
-          imageUrl: '/placeholder-product.jpg'
-        });
+
+      console.log('Image generation completed for:', product.name);
+      let productImageUrl = null;
+      if (imageOutput && typeof (imageOutput as any).url === 'function') {
+        productImageUrl = (imageOutput as any).url();
+      } else if (Array.isArray(imageOutput) && imageOutput.length > 0) {
+        productImageUrl = imageOutput[0];
+      } else if (typeof imageOutput === 'string') {
+        productImageUrl = imageOutput;
+      } else if (imageOutput && typeof imageOutput === 'object') {
+        productImageUrl = (imageOutput as any).url || (imageOutput as any).data;
       }
+
+      console.log('Image URL for', product.name, ':', productImageUrl);
+
+      products.push({
+        id: products.length + 1,
+        name: product.name,
+        price: product.estimatedPrice,
+        description: product.description,
+        imageUrl: productImageUrl.href
+      });
     }
 
-    const catalogue = {
-      products,
-      totalProducts: products.length,
-      categories: ['Custom'] // Single category since we're removing categories
-    };
+    console.log('Product catalogue generation completed successfully');
+    console.log('Total products created:', products.length);
 
-    console.log('🎉 [ProductCatalogue] Successfully generated product catalogue:');
-    console.log('📦 [ProductCatalogue] Total products:', catalogue.totalProducts);
-    console.log('📋 [ProductCatalogue] Product names:', products.map(p => p.name));
-
-    return catalogue;
-
-  } catch (error) {
-    console.error('💥 [ProductCatalogue] Error generating product catalogue:', error);
-    
-    // Fallback to mock data with generated images (default to 1 product)
-    console.log('🔄 [ProductCatalogue] Using fallback data with image generation...');
-    const fallbackProducts = [
-      { name: 'Custom Product', description: 'Personalized item based on your request', estimatedPrice: 'AUD 49.99' }
-    ];
-
-    const products = [];
-    
-    for (let i = 0; i < fallbackProducts.length; i++) {
-      const product = fallbackProducts[i];
-      console.log(`🎨 [ProductCatalogue] [Fallback] Generating image for ${product.name}...`);
-      
-      try {
-        const imageOutput = await replicate.run(
-          "fofr/flux-kontext-pro",
-          {
-            input: {
-              prompt: `Professional product photography of ${product.name}: ${product.description}, white background, studio lighting, high quality, commercial photography`,
-              num_outputs: 1,
-              aspect_ratio: "1:1",
-              output_format: "webp",
-              output_quality: 90
-            }
-          }
-        );
-
-        // Extract URL from the response
-        let imageUrl = '/mock-product.jpg';
-        if (Array.isArray(imageOutput) && imageOutput.length > 0) {
-          imageUrl = imageOutput[0];
-        } else if (typeof imageOutput === 'string') {
-          imageUrl = imageOutput;
-        } else if (imageOutput && typeof imageOutput === 'object') {
-          imageUrl = (imageOutput as any).url || (imageOutput as any).data || '/mock-product.jpg';
-        }
-        
-        console.log(`✅ [ProductCatalogue] [Fallback] Image generated for ${product.name}:`, typeof imageUrl, imageUrl?.substring?.(0, 100));
-
-        products.push({
-          id: (i + 1).toString(),
-          name: product.name,
-          price: product.estimatedPrice,
-          description: product.description,
-          imageUrl: imageUrl
-        });
-      } catch (fallbackError) {
-        console.error(`❌ [ProductCatalogue] [Fallback] Failed to generate image for ${product.name}:`, fallbackError);
-        
-        products.push({
-          id: (i + 1).toString(),
-          name: product.name,
-          price: product.estimatedPrice,
-          description: product.description,
-          imageUrl: '/mock-product.jpg'
-        });
-      }
-    }
-
-    const fallbackCatalogue = {
+    return {
       products,
       totalProducts: products.length,
       categories: ['Custom']
     };
 
-    console.log('🆘 [ProductCatalogue] Fallback catalogue generated:');
-    console.log('📦 [ProductCatalogue] Total products:', fallbackCatalogue.totalProducts);
-
-    return fallbackCatalogue;
+  } catch (error) {
+    console.error('Error generating product catalogue:', error);
+    return null;
   }
 }
