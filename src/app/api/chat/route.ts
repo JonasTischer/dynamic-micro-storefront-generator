@@ -34,11 +34,17 @@ export async function POST(request: NextRequest) {
 
     // Add attachment information and generate products if attachments exist
     if (attachments.length > 0) {
+      console.log('📎 [ChatAPI] Processing', attachments.length, 'attachments');
       const firstAttachment = attachments[0];
       const input = firstAttachment?.file || firstAttachment;
+      console.log('🔄 [ChatAPI] Calling generateProductCatalogueFromImage...');
+      
       const catalogue = await generateProductCatalogueFromImage(message!, input);
+      console.log('📋 [ChatAPI] Received catalogue:', catalogue ? 'SUCCESS' : 'NULL');
 
-      if (catalogue) {
+      if (catalogue && catalogue.products && catalogue.products.length > 0) {
+        console.log('✅ [ChatAPI] Transforming catalogue with', catalogue.products.length, 'products');
+        
         // Transform catalogue to the desired format and create a readable string for LLM
         catalogueData = `<PRODUCT_CATALOGUE>
 ${catalogue.products.map((product: any, index: number) =>
@@ -46,9 +52,15 @@ ${catalogue.products.map((product: any, index: number) =>
 <NAME>${product.name}</NAME>
 <DESCRIPTION>${product.description}</DESCRIPTION>
 <IMAGE_URL>${product.imageUrl || 'No image available'}</IMAGE_URL>
+<PRICE>${product.price || 'Contact for pricing'}</PRICE>
+<CATEGORY>${product.category || 'General'}</CATEGORY>
 </PRODUCT>`
         ).join('\n')}
 </PRODUCT_CATALOGUE>`;
+        
+        console.log('📄 [ChatAPI] Catalogue data prepared for LLM (', catalogueData.length, 'chars)');
+      } else {
+        console.warn('⚠️ [ChatAPI] No valid catalogue received - proceeding without product data');
       }
     }
 
@@ -124,6 +136,10 @@ Now, create the store for: ${message}.`;
 
 
 async function generateProductCatalogueFromImage(userInput: string, attachment: any): Promise<any | null> {
+  console.log('🏪 [ProductCatalogue] Starting product catalogue generation');
+  console.log('📝 [ProductCatalogue] User input:', userInput);
+  console.log('📎 [ProductCatalogue] Attachment type:', typeof attachment, attachment?.constructor?.name);
+
   const replicate = new Replicate({
     auth: process.env.REPLICATE_API_KEY,
   });
@@ -132,12 +148,15 @@ async function generateProductCatalogueFromImage(userInput: string, attachment: 
     // Convert file to base64 if it's a File object
     let imageData = attachment;
     if (attachment?.file && typeof attachment.file.arrayBuffer === 'function') {
+      console.log('🖼️ [ProductCatalogue] Converting file to base64, type:', attachment.file.type);
       const buffer = await attachment.file.arrayBuffer();
       const base64 = Buffer.from(buffer).toString('base64');
       imageData = `data:${attachment.file.type};base64,${base64}`;
+      console.log('✅ [ProductCatalogue] File converted to base64, size:', base64.length, 'chars');
     }
 
     // Extract product information from image using vision model
+    console.log('🔍 [ProductCatalogue] Analyzing image with BLIP model...');
     const productAnalysis = await replicate.run(
       "salesforce/blip:2e1dddc8621f72155f24cf2e0adbde548458d3cab9f00c0139eea840d0ac4746",
       {
@@ -149,6 +168,8 @@ async function generateProductCatalogueFromImage(userInput: string, attachment: 
       }
     );
 
+    console.log('📊 [ProductCatalogue] Image analysis result:', productAnalysis);
+
     // Generate product images using Replicate's image generation model
     const products = [];
     
@@ -158,8 +179,10 @@ async function generateProductCatalogueFromImage(userInput: string, attachment: 
       if (typeof productAnalysis === 'string' && productAnalysis.includes('{')) {
         const parsed = JSON.parse(productAnalysis);
         productList = parsed.products || [];
+        console.log('✅ [ProductCatalogue] Parsed', productList.length, 'products from analysis');
       }
-    } catch {
+    } catch (parseError) {
+      console.log('⚠️ [ProductCatalogue] Failed to parse analysis, using fallback products');
       // Fallback to analyzing the user input for product ideas
       productList = [
         { name: 'Featured Product 1', description: 'High-quality item from the collection', category: 'Featured' },
@@ -168,9 +191,12 @@ async function generateProductCatalogueFromImage(userInput: string, attachment: 
       ];
     }
 
+    console.log('🛍️ [ProductCatalogue] Processing', Math.min(productList.length, 6), 'products for image generation');
+
     // Generate images for each product using Replicate
     for (let i = 0; i < Math.min(productList.length, 6); i++) {
       const product = productList[i];
+      console.log(`🎨 [ProductCatalogue] Generating image ${i + 1}/${Math.min(productList.length, 6)} for:`, product.name || `Product ${i + 1}`);
       
       try {
         // Generate product image using SDXL model
@@ -183,7 +209,18 @@ async function generateProductCatalogueFromImage(userInput: string, attachment: 
           }
         );
 
-        const imageUrl = Array.isArray(imageOutput) ? imageOutput[0] : imageOutput;
+        // Extract URL from the response (handle different response formats)
+        let imageUrl = '/placeholder-product.jpg';
+        if (Array.isArray(imageOutput) && imageOutput.length > 0) {
+          imageUrl = imageOutput[0];
+        } else if (typeof imageOutput === 'string') {
+          imageUrl = imageOutput;
+        } else if (imageOutput && typeof imageOutput === 'object') {
+          // Handle case where imageOutput might be a stream or object
+          imageUrl = imageOutput.url || imageOutput.data || '/placeholder-product.jpg';
+        }
+        
+        console.log(`✅ [ProductCatalogue] Image generated successfully for ${product.name || `Product ${i + 1}`}:`, typeof imageUrl, imageUrl?.substring?.(0, 100));
 
         products.push({
           id: (i + 1).toString(),
@@ -194,7 +231,7 @@ async function generateProductCatalogueFromImage(userInput: string, attachment: 
           imageUrl: imageUrl || '/placeholder-product.jpg'
         });
       } catch (imageError) {
-        console.warn(`Failed to generate image for product ${i + 1}:`, imageError);
+        console.error(`❌ [ProductCatalogue] Failed to generate image for product ${i + 1}:`, imageError);
         
         products.push({
           id: (i + 1).toString(),
@@ -207,16 +244,24 @@ async function generateProductCatalogueFromImage(userInput: string, attachment: 
       }
     }
 
-    return {
+    const catalogue = {
       products,
       totalProducts: products.length,
       categories: [...new Set(products.map(p => p.category))]
     };
 
+    console.log('🎉 [ProductCatalogue] Successfully generated product catalogue:');
+    console.log('📦 [ProductCatalogue] Total products:', catalogue.totalProducts);
+    console.log('🏷️ [ProductCatalogue] Categories:', catalogue.categories);
+    console.log('📋 [ProductCatalogue] Product names:', products.map(p => p.name));
+
+    return catalogue;
+
   } catch (error) {
-    console.error('Error generating product catalogue:', error);
+    console.error('💥 [ProductCatalogue] Error generating product catalogue:', error);
     
     // Fallback to mock data with generated images
+    console.log('🔄 [ProductCatalogue] Using fallback data with image generation...');
     const fallbackProducts = [
       { name: 'Premium Sneakers', description: 'High-quality athletic footwear with modern design', category: 'Footwear' },
       { name: 'Vintage Jacket', description: 'Stylish vintage-inspired outerwear', category: 'Clothing' },
@@ -227,6 +272,7 @@ async function generateProductCatalogueFromImage(userInput: string, attachment: 
     
     for (let i = 0; i < fallbackProducts.length; i++) {
       const product = fallbackProducts[i];
+      console.log(`🎨 [ProductCatalogue] [Fallback] Generating image for ${product.name}...`);
       
       try {
         const imageOutput = await replicate.run(
@@ -238,21 +284,34 @@ async function generateProductCatalogueFromImage(userInput: string, attachment: 
           }
         );
 
-        const imageUrl = Array.isArray(imageOutput) ? imageOutput[0] : imageOutput;
+        // Extract URL from the response (handle different response formats)
+        let imageUrl = '/mock-product.jpg';
+        if (Array.isArray(imageOutput) && imageOutput.length > 0) {
+          imageUrl = imageOutput[0];
+        } else if (typeof imageOutput === 'string') {
+          imageUrl = imageOutput;
+        } else if (imageOutput && typeof imageOutput === 'object') {
+          // Handle case where imageOutput might be a stream or object
+          imageUrl = imageOutput.url || imageOutput.data || '/mock-product.jpg';
+        }
+        
+        console.log(`✅ [ProductCatalogue] [Fallback] Image generated for ${product.name}:`, typeof imageUrl, imageUrl?.substring?.(0, 100));
 
         products.push({
           id: (i + 1).toString(),
           name: product.name,
-          price: (Math.random() * 100 + 50).toFixed(2),
+          price: `AUD ${(Math.random() * 100 + 50).toFixed(2)}`,
           description: product.description,
           category: product.category,
           imageUrl: imageUrl
         });
-      } catch {
+      } catch (fallbackError) {
+        console.error(`❌ [ProductCatalogue] [Fallback] Failed to generate image for ${product.name}:`, fallbackError);
+        
         products.push({
           id: (i + 1).toString(),
           name: product.name,
-          price: (Math.random() * 100 + 50).toFixed(2),
+          price: `AUD ${(Math.random() * 100 + 50).toFixed(2)}`,
           description: product.description,
           category: product.category,
           imageUrl: '/mock-product.jpg'
@@ -260,10 +319,16 @@ async function generateProductCatalogueFromImage(userInput: string, attachment: 
       }
     }
 
-    return {
+    const fallbackCatalogue = {
       products,
       totalProducts: products.length,
       categories: ['Footwear', 'Clothing', 'Electronics']
     };
+
+    console.log('🆘 [ProductCatalogue] Fallback catalogue generated:');
+    console.log('📦 [ProductCatalogue] Total products:', fallbackCatalogue.totalProducts);
+    console.log('🏷️ [ProductCatalogue] Categories:', fallbackCatalogue.categories);
+
+    return fallbackCatalogue;
   }
 }
