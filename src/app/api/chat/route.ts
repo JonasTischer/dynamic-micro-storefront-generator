@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { v0 } from 'v0-sdk';
 import Replicate from 'replicate';
+import { openai } from '@ai-sdk/openai';
+import { generateObject } from 'ai';
+import { z } from 'zod';
 
 export async function POST(request: NextRequest) {
   try {
@@ -41,6 +44,10 @@ export async function POST(request: NextRequest) {
       
       const catalogue = await generateProductCatalogueFromImage(message!, input);
       console.log('📋 [ChatAPI] Received catalogue:', catalogue ? 'SUCCESS' : 'NULL');
+
+
+
+
 
       if (catalogue && catalogue.products && catalogue.products.length > 0) {
         console.log('✅ [ChatAPI] Transforming catalogue with', catalogue.products.length, 'products');
@@ -146,7 +153,7 @@ async function generateProductCatalogueFromImage(userInput: string, attachment: 
 
   try {
     // Convert file to base64 if it's a File object
-    let imageData = attachment;
+    let imageData = null;
     if (attachment?.file && typeof attachment.file.arrayBuffer === 'function') {
       console.log('🖼️ [ProductCatalogue] Converting file to base64, type:', attachment.file.type);
       const buffer = await attachment.file.arrayBuffer();
@@ -155,90 +162,97 @@ async function generateProductCatalogueFromImage(userInput: string, attachment: 
       console.log('✅ [ProductCatalogue] File converted to base64, size:', base64.length, 'chars');
     }
 
-    // Extract product information from image using vision model
-    console.log('🔍 [ProductCatalogue] Analyzing image with BLIP model...');
-    const productAnalysis = await replicate.run(
-      "salesforce/blip:2e1dddc8621f72155f24cf2e0adbde548458d3cab9f00c0139eea840d0ac4746",
-      {
-        input: {
-          image: imageData,
-          task: "image_captioning",
-          question: `Analyze this image and identify any products visible. For each product, provide: name, description, estimated price in AUD, and category. Format as JSON with products array.`
-        }
-      }
-    );
-
-    console.log('📊 [ProductCatalogue] Image analysis result:', productAnalysis);
-
-    // Generate product images using Replicate's image generation model
-    const products = [];
+    // Use GPT-5 to generate product catalog based on user prompt and image
+    console.log('🤖 [ProductCatalogue] Using GPT-5 to generate product catalog...');
     
-    // Parse the analysis result or use fallback
-    let productList = [];
-    try {
-      if (typeof productAnalysis === 'string' && productAnalysis.includes('{')) {
-        const parsed = JSON.parse(productAnalysis);
-        productList = parsed.products || [];
-        console.log('✅ [ProductCatalogue] Parsed', productList.length, 'products from analysis');
-      }
-    } catch (parseError) {
-      console.log('⚠️ [ProductCatalogue] Failed to parse analysis, using fallback products');
-      // Fallback to analyzing the user input for product ideas
-      productList = [
-        { name: 'Featured Product 1', description: 'High-quality item from the collection', category: 'Featured' },
-        { name: 'Featured Product 2', description: 'Premium selection for modern lifestyle', category: 'Featured' },
-        { name: 'Featured Product 3', description: 'Trendy and stylish product', category: 'Featured' }
-      ];
+    const productSchema = z.object({
+      products: z.array(z.object({
+        name: z.string().describe('Product name'),
+        description: z.string().describe('Product description'),
+        estimatedPrice: z.string().describe('Estimated price in AUD format like "AUD 29.99"'),
+        imagePrompt: z.string().describe('Detailed prompt for generating product image')
+      }))
+    });
+
+    const prompt = imageData 
+      ? `Based on this user request: "${userInput}" and the provided image, create a product catalog. The user will specify how many products they want in their request (if they don't specify a number, create exactly 1 product). Generate creative product ideas that match their vision. Focus on products that can be personalized or customized.`
+      : `Based on this user request: "${userInput}", create a product catalog. The user will specify how many products they want in their request (if they don't specify a number, create exactly 1 product). Generate creative product ideas that match their vision. Focus on products that can be personalized or customized.`;
+
+    let catalogResult;
+    if (imageData) {
+      catalogResult = await generateObject({
+        model: openai('gpt-5'),
+        schema: productSchema,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: prompt }
+            ]
+          }
+        ]
+      });
+    } else {
+      catalogResult = await generateObject({
+        model: openai('gpt-5'),
+        schema: productSchema,
+        prompt
+      });
     }
 
-    console.log('🛍️ [ProductCatalogue] Processing', Math.min(productList.length, 6), 'products for image generation');
+    console.log('✅ [ProductCatalogue] GPT-5 generated', catalogResult.object.products.length, 'products');
 
-    // Generate images for each product using Replicate
-    for (let i = 0; i < Math.min(productList.length, 6); i++) {
-      const product = productList[i];
-      console.log(`🎨 [ProductCatalogue] Generating image ${i + 1}/${Math.min(productList.length, 6)} for:`, product.name || `Product ${i + 1}`);
+    const products = [];
+    
+    console.log('🛍️ [ProductCatalogue] Processing', catalogResult.object.products.length, 'products for image generation');
+
+    // Generate images for each product using Replicate with FLUX-kontext-pro
+    for (let i = 0; i < catalogResult.object.products.length; i++) {
+      const product = catalogResult.object.products[i];
+      console.log(`🎨 [ProductCatalogue] Generating image ${i + 1}/${catalogResult.object.products.length} for:`, product.name);
       
       try {
-        // Generate product image using SDXL model
+        // Generate product image using FLUX-kontext-pro model
         const imageOutput = await replicate.run(
-          "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
+          "fofr/flux-kontext-pro",
           {
             input: {
-              prompt: `Professional product photography of ${product.name || `product ${i + 1}`}: ${product.description || 'modern stylish item'}, white background, studio lighting, high quality, commercial photography, clean minimalist style`
+              prompt: `${product.imagePrompt}, professional product photography, white background, studio lighting, high quality, commercial photography, clean minimalist style`,
+              num_outputs: 1,
+              aspect_ratio: "1:1",
+              output_format: "webp",
+              output_quality: 90
             }
           }
         );
 
-        // Extract URL from the response (handle different response formats)
+        // Extract URL from the response
         let imageUrl = '/placeholder-product.jpg';
         if (Array.isArray(imageOutput) && imageOutput.length > 0) {
           imageUrl = imageOutput[0];
         } else if (typeof imageOutput === 'string') {
           imageUrl = imageOutput;
         } else if (imageOutput && typeof imageOutput === 'object') {
-          // Handle case where imageOutput might be a stream or object
-          imageUrl = imageOutput.url || imageOutput.data || '/placeholder-product.jpg';
+          imageUrl = (imageOutput as any).url || (imageOutput as any).data || '/placeholder-product.jpg';
         }
         
-        console.log(`✅ [ProductCatalogue] Image generated successfully for ${product.name || `Product ${i + 1}`}:`, typeof imageUrl, imageUrl?.substring?.(0, 100));
+        console.log(`✅ [ProductCatalogue] Image generated successfully for ${product.name}:`, typeof imageUrl, imageUrl?.substring?.(0, 100));
 
         products.push({
           id: (i + 1).toString(),
-          name: product.name || `Product ${i + 1}`,
-          price: product.price || `AUD ${(Math.random() * 100 + 20).toFixed(2)}`,
-          description: product.description || 'High-quality product with modern design',
-          category: product.category || 'Featured',
-          imageUrl: imageUrl || '/placeholder-product.jpg'
+          name: product.name,
+          price: product.estimatedPrice,
+          description: product.description,
+          imageUrl: imageUrl
         });
       } catch (imageError) {
         console.error(`❌ [ProductCatalogue] Failed to generate image for product ${i + 1}:`, imageError);
         
         products.push({
           id: (i + 1).toString(),
-          name: product.name || `Product ${i + 1}`,
-          price: product.price || `AUD ${(Math.random() * 100 + 20).toFixed(2)}`,
-          description: product.description || 'High-quality product with modern design',
-          category: product.category || 'Featured',
+          name: product.name,
+          price: product.estimatedPrice,
+          description: product.description,
           imageUrl: '/placeholder-product.jpg'
         });
       }
@@ -247,12 +261,11 @@ async function generateProductCatalogueFromImage(userInput: string, attachment: 
     const catalogue = {
       products,
       totalProducts: products.length,
-      categories: [...new Set(products.map(p => p.category))]
+      categories: ['Custom'] // Single category since we're removing categories
     };
 
     console.log('🎉 [ProductCatalogue] Successfully generated product catalogue:');
     console.log('📦 [ProductCatalogue] Total products:', catalogue.totalProducts);
-    console.log('🏷️ [ProductCatalogue] Categories:', catalogue.categories);
     console.log('📋 [ProductCatalogue] Product names:', products.map(p => p.name));
 
     return catalogue;
@@ -260,12 +273,10 @@ async function generateProductCatalogueFromImage(userInput: string, attachment: 
   } catch (error) {
     console.error('💥 [ProductCatalogue] Error generating product catalogue:', error);
     
-    // Fallback to mock data with generated images
+    // Fallback to mock data with generated images (default to 1 product)
     console.log('🔄 [ProductCatalogue] Using fallback data with image generation...');
     const fallbackProducts = [
-      { name: 'Premium Sneakers', description: 'High-quality athletic footwear with modern design', category: 'Footwear' },
-      { name: 'Vintage Jacket', description: 'Stylish vintage-inspired outerwear', category: 'Clothing' },
-      { name: 'Smart Watch', description: 'Advanced fitness tracking and notifications', category: 'Electronics' }
+      { name: 'Custom Product', description: 'Personalized item based on your request', estimatedPrice: 'AUD 49.99' }
     ];
 
     const products = [];
@@ -276,23 +287,26 @@ async function generateProductCatalogueFromImage(userInput: string, attachment: 
       
       try {
         const imageOutput = await replicate.run(
-          "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
+          "fofr/flux-kontext-pro",
           {
             input: {
-              prompt: `Professional product photography of ${product.name}: ${product.description}, white background, studio lighting, high quality, commercial photography`
+              prompt: `Professional product photography of ${product.name}: ${product.description}, white background, studio lighting, high quality, commercial photography`,
+              num_outputs: 1,
+              aspect_ratio: "1:1",
+              output_format: "webp",
+              output_quality: 90
             }
           }
         );
 
-        // Extract URL from the response (handle different response formats)
+        // Extract URL from the response
         let imageUrl = '/mock-product.jpg';
         if (Array.isArray(imageOutput) && imageOutput.length > 0) {
           imageUrl = imageOutput[0];
         } else if (typeof imageOutput === 'string') {
           imageUrl = imageOutput;
         } else if (imageOutput && typeof imageOutput === 'object') {
-          // Handle case where imageOutput might be a stream or object
-          imageUrl = imageOutput.url || imageOutput.data || '/mock-product.jpg';
+          imageUrl = (imageOutput as any).url || (imageOutput as any).data || '/mock-product.jpg';
         }
         
         console.log(`✅ [ProductCatalogue] [Fallback] Image generated for ${product.name}:`, typeof imageUrl, imageUrl?.substring?.(0, 100));
@@ -300,9 +314,8 @@ async function generateProductCatalogueFromImage(userInput: string, attachment: 
         products.push({
           id: (i + 1).toString(),
           name: product.name,
-          price: `AUD ${(Math.random() * 100 + 50).toFixed(2)}`,
+          price: product.estimatedPrice,
           description: product.description,
-          category: product.category,
           imageUrl: imageUrl
         });
       } catch (fallbackError) {
@@ -311,9 +324,8 @@ async function generateProductCatalogueFromImage(userInput: string, attachment: 
         products.push({
           id: (i + 1).toString(),
           name: product.name,
-          price: `AUD ${(Math.random() * 100 + 50).toFixed(2)}`,
+          price: product.estimatedPrice,
           description: product.description,
-          category: product.category,
           imageUrl: '/mock-product.jpg'
         });
       }
@@ -322,12 +334,11 @@ async function generateProductCatalogueFromImage(userInput: string, attachment: 
     const fallbackCatalogue = {
       products,
       totalProducts: products.length,
-      categories: ['Footwear', 'Clothing', 'Electronics']
+      categories: ['Custom']
     };
 
     console.log('🆘 [ProductCatalogue] Fallback catalogue generated:');
     console.log('📦 [ProductCatalogue] Total products:', fallbackCatalogue.totalProducts);
-    console.log('🏷️ [ProductCatalogue] Categories:', fallbackCatalogue.categories);
 
     return fallbackCatalogue;
   }
