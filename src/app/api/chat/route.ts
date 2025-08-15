@@ -88,7 +88,7 @@ Focus on: Simple, fast, impulse-buy experience. No complex menus or pages.
 
 Here is the catalogue of products: ${catalogueData}.
 
-Only use images that are provided in the catalogue.
+Only use images that are provided in the catalogue. Don't create any other images or placeholders.
 
 Now, create the store for: ${message}.`;
 
@@ -181,9 +181,7 @@ async function generateProductCatalogueFromImage(userInput: string, attachment: 
       }))
     });
 
-    const prompt = imageUrl
-      ? `Based on this user request: "${userInput}" and the provided image, create a product catalog for merchandise/products that incorporate or feature the uploaded image. The user will specify how many products they want in their request (if they don't specify a number, create exactly 1 product). Generate creative products regardless how absurd they are, etc. that can showcase the uploaded image. For the imagePrompt field, describe how to transform or incorporate the uploaded image into each product (e.g., "Transform this into a cartoon style mug design", "Make this image into a vintage t-shirt print", "Create a minimalist poster version of this image").`
-      : `Based on this user request: "${userInput}", create a product catalog. The user will specify how many products they want in their request (if they don't specify a number, create exactly 1 product). Generate creative product ideas that match their vision. Focus on products that can be personalized or customized.`;
+    const prompt = `Based on this user request: "${userInput}" and the provided image, create a product catalog for merchandise/products that incorporate or feature the uploaded image. The user will specify how many products they want in their request (if they don't specify a number, create exactly 1 product). Generate creative products regardless how absurd they are, etc. that can showcase the uploaded image. For the imagePrompt field, describe how to transform or incorporate the uploaded image into each product (e.g., "Transform this into a cartoon style mug design", "Make this image into an actual rocketship taking off", "Create a minimalist poster version of this image").`
 
     console.log('Generating product catalog with AI... with prompt:', prompt);
     let catalogResult;
