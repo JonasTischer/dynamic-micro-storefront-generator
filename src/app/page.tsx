@@ -194,11 +194,11 @@ export default function Home() {
   // Initial centered Google-like layout (no chat history yet)
   if (chatHistory.length === 0) {
     return (
-      <div className="h-screen flex flex-col bg-gradient-to-br from-orange-50 via-red-50 to-pink-50">
+      <div className="h-screen flex flex-col bg-gradient-to-br from-orange-50 via-red-50 to-pink-50 relative overflow-hidden">
         <Header />
 
-        <div className="flex-1 flex items-center justify-center p-8">
-          <div className="w-full max-w-4xl space-y-12">
+        <div className="flex-1 flex items-center justify-center">
+          <div className="w-full max-w-4xl space-y-8">
             <WelcomeScreen />
 
             <div className="max-w-3xl mx-auto">
@@ -216,6 +216,16 @@ export default function Home() {
 
             <div className="max-w-2xl mx-auto">
               <SuggestedPrompts onPromptClick={setMessage} />
+            </div>
+
+            {/* Animated SVG Background */}
+            <div className="w-full max-w-3xl mx-auto h-64 opacity-70 pointer-events-none">
+              <object
+                data="/shipping-animation.svg"
+                type="image/svg+xml"
+                className="w-full h-full object-contain"
+                aria-hidden="true"
+              />
             </div>
           </div>
         </div>

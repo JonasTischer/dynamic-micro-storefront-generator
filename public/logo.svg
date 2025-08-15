@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 300" role="img" aria-label="Poply logo" preserveAspectRatio="xMidYMid meet">
+  <title>Poply</title>
+  <defs>
+    <style>
+      .coral { fill: #F07A7A; stroke: #D96565; stroke-width: 22; paint-order: stroke; stroke-linejoin: round; }
+      .teal  { stroke: #1E8C93; stroke-width: 20; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+      .bag   { fill: #F6C44E; stroke: #1E8C93; stroke-width: 20; stroke-linejoin: round; }
+      .eye   { fill: #1E8C93; }
+      .smile { stroke: #1E8C93; stroke-width: 16; fill: none; stroke-linecap: round; }
+    </style>
+  </defs>
+
+  <!-- "Pop" -->
+  <text x="40" y="185" font-family="Fredoka, Baloo, Nunito, Poppins, system-ui, -apple-system, Segoe UI, Arial, sans-serif"
+        font-size="160" font-weight="800" class="coral">Pop</text>
+
+  <!-- Shopping bag -->
+  <g transform="translate(355,58)">
+    <!-- Handles -->
+    <path class="teal" d="M40,60 C40,10 140,10 140,60" />
+    <path class="teal" d="M20,60 C20,0 160,0 160,60" />
+    <!-- Bag body -->
+    <rect x="0" y="60" rx="24" ry="24" width="200" height="170" class="bag" />
+    <!-- Face -->
+    <circle cx="70" cy="140" r="10" class="eye"/>
+    <circle cx="130" cy="140" r="10" class="eye"/>
+    <path class="smile" d="M80,170 C100,190 120,190 140,170" />
+  </g>
+
+  <!-- "Ly" -->
+  <text x="585" y="185" font-family="Fredoka, Baloo, Nunito, Poppins, system-ui, -apple-system, Segoe UI, Arial, sans-serif"
+        font-size="160" font-weight="800" class="coral">Ly</text>
+</svg>

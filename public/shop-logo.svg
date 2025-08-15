@@ -1,0 +1,30 @@
+<svg viewBox="0 0 200 100" xmlns="http://www.w3.org/2000/svg">
+  <!-- Shop text with shopping bag -->
+  <g>
+    <!-- S -->
+    <path d="M20 20 Q15 15 25 15 Q35 15 35 25 Q35 35 25 35 Q15 35 15 45 Q15 55 25 55 Q30 55 35 50" 
+          fill="none" stroke="#d946a6" stroke-width="8" stroke-linecap="round"/>
+    
+    <!-- h -->
+    <line x1="45" y1="15" x2="45" y2="55" stroke="#d946a6" stroke-width="8" stroke-linecap="round"/>
+    <path d="M45 30 Q50 25 55 30 Q60 35 60 40 L60 55" 
+          fill="none" stroke="#d946a6" stroke-width="8" stroke-linecap="round"/>
+    
+    <!-- Shopping bag as 'o' -->
+    <g transform="translate(75, 30)">
+      <!-- Bag body -->
+      <rect x="0" y="10" width="25" height="30" rx="3" fill="#fbbf24" stroke="#d946a6" stroke-width="3"/>
+      <!-- Bag handles -->
+      <path d="M5 10 Q5 5 12.5 5 Q20 5 20 10" fill="none" stroke="#d946a6" stroke-width="3"/>
+      <!-- Smiley face -->
+      <circle cx="8" cy="20" r="1.5" fill="#d946a6"/>
+      <circle cx="17" cy="20" r="1.5" fill="#d946a6"/>
+      <path d="M8 28 Q12.5 32 17 28" fill="none" stroke="#d946a6" stroke-width="2" stroke-linecap="round"/>
+    </g>
+    
+    <!-- p -->
+    <line x1="115" y1="30" x2="115" y2="65" stroke="#d946a6" stroke-width="8" stroke-linecap="round"/>
+    <path d="M115 30 Q125 25 135 30 Q140 35 135 40 Q125 45 115 40" 
+          fill="none" stroke="#d946a6" stroke-width="8" stroke-linecap="round"/>
+  </g>
+</svg>

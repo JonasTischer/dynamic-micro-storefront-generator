@@ -158,8 +158,9 @@ export function ChatInput({
           onChange={(e) => setMessage(e.target.value)}
           value={message}
           placeholder={placeholder}
-          className="pr-20 min-h-[60px] text-lg"
-          minHeight={60}
+          className="pr-20 min-h-[80px] !text-xl font-medium"
+          style={{ fontFamily: '"Comic Sans MS", cursive' }}
+          minHeight={100}
         />
 
         <div className="absolute bottom-1 right-1 flex items-center gap-1">
