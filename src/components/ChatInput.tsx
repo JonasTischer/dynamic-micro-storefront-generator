@@ -3,6 +3,7 @@ import { PaperclipIcon, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PromptInput, PromptInputSubmit, PromptInputTextarea } from '@/components/ai-elements/prompt-input';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 interface Attachment {
   url: string;
@@ -152,12 +153,13 @@ export function ChatInput({
       )}
 
       {/* Input form */}
-      <PromptInput onSubmit={onSubmit} className="relative">
+      <PromptInput onSubmit={onSubmit} className={cn("relative", className)}>
         <PromptInputTextarea
           onChange={(e) => setMessage(e.target.value)}
           value={message}
           placeholder={placeholder}
-          className="pr-20 min-h-[60px]"
+          className="pr-20 min-h-[60px] text-lg"
+          minHeight={60}
         />
 
         <div className="absolute bottom-1 right-1 flex items-center gap-1">

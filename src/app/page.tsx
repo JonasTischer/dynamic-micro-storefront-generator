@@ -194,16 +194,14 @@ export default function Home() {
   // Initial centered Google-like layout (no chat history yet)
   if (chatHistory.length === 0) {
     return (
-      <div className="h-screen flex flex-col bg-background">
+      <div className="h-screen flex flex-col bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
         <Header />
 
         <div className="flex-1 flex items-center justify-center p-8">
-          <div className="w-full max-w-2xl space-y-8">
-            <WelcomeScreen onCategoryClick={setMessage} />
+          <div className="w-full max-w-4xl space-y-12">
+            <WelcomeScreen />
 
-            <div className="space-y-6">
-              <SuggestedPrompts onPromptClick={setMessage} />
-
+            <div className="max-w-3xl mx-auto">
               <ChatInput
                 message={message}
                 setMessage={setMessage}
@@ -211,8 +209,13 @@ export default function Home() {
                 isLoading={isLoading}
                 attachments={attachments}
                 setAttachments={setAttachments}
-                placeholder="What's trending? (e.g., 'House of the Dragon finale merch' or attach images for inspiration)"
+                placeholder="Ask TrendyPop to create a pop-up store for..."
+                className="shadow-2xl rounded-2xl border-0 bg-white/80 backdrop-blur-sm"
               />
+            </div>
+
+            <div className="max-w-2xl mx-auto">
+              <SuggestedPrompts onPromptClick={setMessage} />
             </div>
           </div>
         </div>
