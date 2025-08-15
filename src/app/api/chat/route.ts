@@ -35,18 +35,18 @@ export async function POST(request: NextRequest) {
     if (attachments.length > 0) {
       const firstAttachment = attachments[0];
       const input = firstAttachment?.file || firstAttachment;
-      const catalogue = await generateProductCatalogueFromImage(input);
+      const catalogue = await generateProductCatalogueFromImage(message!, input);
 
       if (catalogue) {
         // Transform catalogue to the desired format and create a readable string for LLM
         catalogueData = `<PRODUCT_CATALOGUE>
 ${catalogue.products.map((product: any, index: number) =>
-  `<PRODUCT id="${index + 1}">
+          `<PRODUCT id="${index + 1}">
 <NAME>${product.name}</NAME>
 <DESCRIPTION>${product.description}</DESCRIPTION>
 <IMAGE_URL>${product.imageUrl || 'No image available'}</IMAGE_URL>
 </PRODUCT>`
-).join('\n')}
+        ).join('\n')}
 </PRODUCT_CATALOGUE>`;
       }
     }
@@ -93,10 +93,10 @@ Now, create the store for: ${message}.`;
         system: 'You are an expert in creating viral pop-up stores.',
         message: ENHANCED_USER_PROMPT,
         modelConfiguration: {
-        modelId: 'v0-gpt-5',
-        imageGenerations: false,
-        thinking: false,
-      },
+          modelId: 'v0-gpt-5',
+          imageGenerations: false,
+          thinking: false,
+        },
       });
     }
 
@@ -122,36 +122,132 @@ Now, create the store for: ${message}.`;
 }
 
 
-async function generateProductCatalogueFromImage(_attachment: any): Promise<any | null> {
+async function generateProductCatalogueFromImage(_userInput: string, _attachment: any): Promise<any | null> {
   // Mock data for now
-  return {
-    products: [
-      {
-        id: '1',
-        name: 'Premium Sneakers',
-        price: 129.99,
-        description: 'High-quality athletic footwear with modern design',
-        category: 'Footwear',
-        imageUrl: '/mock-sneaker.jpg'
+  try {
+
+    // ---- System prompt template you can extend ----
+    const BASE_SYSTEM_PROMPT = `
+You are a data extractor that outputs only what the schema asks for.
+Infer product-like entries from the user's text and the provided image.
+Keep values concise and useful for storefront UI.
+`;
+
+    // Optional: add more context/instructions at runtime via env or other source
+    const EXTRA_SYSTEM_CONTEXT = process.env.GENERATOR_CONTEXT ?? "";
+
+    // Optional: extra generation instructions appended to the user turn
+    const EXTRA_INSTRUCTIONS = `
+Return realistic placeholder prices if not present (e.g., "AUD 29.90").
+If an image URL is unknown, synthesize a descriptive path-like URL from the name.
+`;
+
+    // JSON schema for structured outputs (strict)
+    const productSchema = {
+      name: "product_list",
+      strict: true,
+      schema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["items"],
+        properties: {
+          items: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["name", "description", "imageurl", "price"],
+              properties: {
+                name: { type: "string" },
+                description: { type: "string" },
+                imageurl: { type: "string" },
+                price: { type: "string" },
+              },
+            },
+          },
+        },
       },
-      {
-        id: '2',
-        name: 'Vintage Jacket',
-        price: 89.99,
-        description: 'Stylish vintage-inspired outerwear',
-        category: 'Clothing',
-        imageUrl: '/mock-jacket.jpg'
-      },
-      {
-        id: '3',
-        name: 'Smart Watch',
-        price: 199.99,
-        description: 'Advanced fitness tracking and notifications',
-        category: 'Electronics',
-        imageUrl: '/mock-watch.jpg'
-      }
-    ],
-    totalProducts: 3,
-    categories: ['Footwear', 'Clothing', 'Electronics']
-  };
+    } as const;
+
+    const systemPrompt = `${BASE_SYSTEM_PROMPT}\n${EXTRA_SYSTEM_CONTEXT}`.trim();
+
+    const inputContent: any[] = [];
+    inputContent.push({ type: "input_text", text });
+    if (imageDataUrl) {
+      inputContent.push({ type: "input_image", image: imageDataUrl });
+    }
+    if (EXTRA_INSTRUCTIONS) {
+      inputContent.push({ type: "input_text", text: EXTRA_INSTRUCTIONS });
+    }
+
+    const response = await client.responses.create({
+      // Pick a current multimodal model you have access to
+      model: process.env.OPENAI_MODEL ?? "gpt-5", // e.g. "gpt-4.1" or "gpt-4o"
+      input: [
+        {
+          role: "system",
+          content: [{ type: "text", text: systemPrompt }],
+        },
+        {
+          role: "user",
+          content: inputContent,
+        },
+      ],
+      response_format: { type: "json_schema", json_schema: productSchema },
+      // You can also set max_output_tokens if you expect a large list
+      // max_output_tokens: 2048,
+    });
+
+    // With structured outputs, the SDK exposes a parsed result:
+    // @ts-expect-error: types may lag behind SDK; output_parsed is present at runtime
+    const parsed = response.output_parsed ?? null;
+
+    // Fallback if parsed is missing (defensive)
+    const raw =
+      // @ts-expect-error
+      response.output?.[0]?.content?.[0]?.text ??
+      // @ts-expect-error
+      response.output_text ??
+      null;
+
+    const payload =
+      parsed ??
+      (raw ? JSON.parse(raw) : { items: [] });
+
+    return Response.json(payload, { status: 200 });
+
+
+
+  } catch (error) {
+    return {
+      products: [
+        {
+          id: '1',
+          name: 'Premium Sneakers',
+          price: 129.99,
+          description: 'High-quality athletic footwear with modern design',
+          category: 'Footwear',
+          imageUrl: '/mock-sneaker.jpg'
+        },
+        {
+          id: '2',
+          name: 'Vintage Jacket',
+          price: 89.99,
+          description: 'Stylish vintage-inspired outerwear',
+          category: 'Clothing',
+          imageUrl: '/mock-jacket.jpg'
+        },
+        {
+          id: '3',
+          name: 'Smart Watch',
+          price: 199.99,
+          description: 'Advanced fitness tracking and notifications',
+          category: 'Electronics',
+          imageUrl: '/mock-watch.jpg'
+        }
+      ],
+      totalProducts: 3,
+      categories: ['Footwear', 'Clothing', 'Electronics']
+    };
+  }
 }
