@@ -1,0 +1,29 @@
+<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <rect width="200" height="200" fill="#F5F5DC" rx="20"/>
+  
+  <!-- PopLy Text -->
+  <text x="30" y="80" font-family="Arial, sans-serif" font-size="42" font-weight="bold" fill="#FF6B6B">Po</text>
+  <text x="100" y="80" font-family="Arial, sans-serif" font-size="42" font-weight="bold" fill="#FF6B6B">p</text>
+  <text x="130" y="80" font-family="Arial, sans-serif" font-size="42" font-weight="bold" fill="#FF6B6B">l</text>
+  <text x="150" y="80" font-family="Arial, sans-serif" font-size="42" font-weight="bold" fill="#FF6B6B">y</text>
+  
+  <!-- Starburst/rays -->
+  <g transform="translate(150, 40)">
+    <!-- Top ray -->
+    <ellipse cx="0" cy="-15" rx="3" ry="12" fill="#FF8C42" transform="rotate(0)"/>
+    <!-- Top-right ray -->
+    <ellipse cx="0" cy="-15" rx="3" ry="12" fill="#FF8C42" transform="rotate(45)"/>
+    <!-- Right ray -->
+    <ellipse cx="0" cy="-15" rx="3" ry="12" fill="#FF8C42" transform="rotate(90)"/>
+    <!-- Bottom-right ray -->
+    <ellipse cx="0" cy="-15" rx="3" ry="12" fill="#FF8C42" transform="rotate(135)"/>
+    <!-- Bottom ray -->
+    <ellipse cx="0" cy="-15" rx="3" ry="12" fill="#FF8C42" transform="rotate(180)"/>
+    <!-- Bottom-left ray -->
+    <ellipse cx="0" cy="-15" rx="3" ry="12" fill="#FF8C42" transform="rotate(225)"/>
+    <!-- Left ray -->
+    <ellipse cx="0" cy="-15" rx="3" ry="12" fill="#FF8C42" transform="rotate(270)"/>
+    <!-- Top-left ray -->
+    <ellipse cx="0" cy="-15" rx="3" ry="12" fill="#FF8C42" transform="rotate(315)"/>
+  </g>
+</svg>

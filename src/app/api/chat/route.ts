@@ -74,7 +74,7 @@ ${catalogue.products.map((product: any, index: number) =>
 
 Build a single-page Next.js store with:
 - Eye-catching hero section with trend-themed design
-- Simple product grid showing 4-6 items with prices
+- Simple product grid showing items with prices
 - No need to add things like "Add to favorites" or "Add to cart"
 - Quick "Buy Now" buttons for each product
 - The "Buy Now" button should open a modal with a checkout form ( the pay function can be mocked )
@@ -83,11 +83,12 @@ Build a single-page Next.js store with:
 - Trendy colors and bold typography
 - No testimonials
 - Social sharing buttons
-- Images are important, make sure to create all the images you need and don't use placeholder images
 
 Focus on: Simple, fast, impulse-buy experience. No complex menus or pages.
 
 Here is the catalogue of products: ${catalogueData}.
+
+Only use images that are provided in the catalogue.
 
 Now, create the store for: ${message}.`;
 
@@ -181,7 +182,7 @@ async function generateProductCatalogueFromImage(userInput: string, attachment: 
     });
 
     const prompt = imageUrl
-      ? `Based on this user request: "${userInput}" and the provided image, create a product catalog for merchandise/products that incorporate or feature the uploaded image. The user will specify how many products they want in their request (if they don't specify a number, create exactly 1 product). Generate creative product ideas like mugs, t-shirts, posters, phone cases, etc. that can showcase the uploaded image. For the imagePrompt field, describe how to transform or incorporate the uploaded image into each product (e.g., "Transform this into a cartoon style mug design", "Make this image into a vintage t-shirt print", "Create a minimalist poster version of this image").`
+      ? `Based on this user request: "${userInput}" and the provided image, create a product catalog for merchandise/products that incorporate or feature the uploaded image. The user will specify how many products they want in their request (if they don't specify a number, create exactly 1 product). Generate creative products regardless how absurd they are, etc. that can showcase the uploaded image. For the imagePrompt field, describe how to transform or incorporate the uploaded image into each product (e.g., "Transform this into a cartoon style mug design", "Make this image into a vintage t-shirt print", "Create a minimalist poster version of this image").`
       : `Based on this user request: "${userInput}", create a product catalog. The user will specify how many products they want in their request (if they don't specify a number, create exactly 1 product). Generate creative product ideas that match their vision. Focus on products that can be personalized or customized.`;
 
     console.log('Generating product catalog with AI... with prompt:', prompt);

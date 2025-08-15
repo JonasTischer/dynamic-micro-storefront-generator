@@ -194,7 +194,7 @@ export default function Home() {
   // Initial centered Google-like layout (no chat history yet)
   if (chatHistory.length === 0) {
     return (
-      <div className="h-screen flex flex-col bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
+      <div className="h-screen flex flex-col bg-gradient-to-br from-orange-50 via-red-50 to-pink-50">
         <Header />
 
         <div className="flex-1 flex items-center justify-center p-8">
@@ -209,7 +209,7 @@ export default function Home() {
                 isLoading={isLoading}
                 attachments={attachments}
                 setAttachments={setAttachments}
-                placeholder="Ask TrendyPop to create a pop-up store for..."
+                placeholder="Ask PopLy to create a pop-up store for..."
                 className="shadow-2xl rounded-2xl border-0 bg-white/80 backdrop-blur-sm"
               />
             </div>
