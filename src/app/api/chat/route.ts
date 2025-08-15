@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { v0 } from 'v0-sdk';
+import Replicate from 'replicate';
 
 export async function POST(request: NextRequest) {
   try {
@@ -122,131 +123,146 @@ Now, create the store for: ${message}.`;
 }
 
 
-async function generateProductCatalogueFromImage(_userInput: string, _attachment: any): Promise<any | null> {
-  // Mock data for now
+async function generateProductCatalogueFromImage(userInput: string, attachment: any): Promise<any | null> {
+  const replicate = new Replicate({
+    auth: process.env.REPLICATE_API_KEY,
+  });
+
   try {
-
-    // ---- System prompt template you can extend ----
-    const BASE_SYSTEM_PROMPT = `
-You are a data extractor that outputs only what the schema asks for.
-Infer product-like entries from the user's text and the provided image.
-Keep values concise and useful for storefront UI.
-`;
-
-    // Optional: add more context/instructions at runtime via env or other source
-    const EXTRA_SYSTEM_CONTEXT = process.env.GENERATOR_CONTEXT ?? "";
-
-    // Optional: extra generation instructions appended to the user turn
-    const EXTRA_INSTRUCTIONS = `
-Return realistic placeholder prices if not present (e.g., "AUD 29.90").
-If an image URL is unknown, synthesize a descriptive path-like URL from the name.
-`;
-
-    // JSON schema for structured outputs (strict)
-    const productSchema = {
-      name: "product_list",
-      strict: true,
-      schema: {
-        type: "object",
-        additionalProperties: false,
-        required: ["items"],
-        properties: {
-          items: {
-            type: "array",
-            items: {
-              type: "object",
-              additionalProperties: false,
-              required: ["name", "description", "imageurl", "price"],
-              properties: {
-                name: { type: "string" },
-                description: { type: "string" },
-                imageurl: { type: "string" },
-                price: { type: "string" },
-              },
-            },
-          },
-        },
-      },
-    } as const;
-
-    const systemPrompt = `${BASE_SYSTEM_PROMPT}\n${EXTRA_SYSTEM_CONTEXT}`.trim();
-
-    const inputContent: any[] = [];
-    inputContent.push({ type: "input_text", text });
-    if (imageDataUrl) {
-      inputContent.push({ type: "input_image", image: imageDataUrl });
-    }
-    if (EXTRA_INSTRUCTIONS) {
-      inputContent.push({ type: "input_text", text: EXTRA_INSTRUCTIONS });
+    // Convert file to base64 if it's a File object
+    let imageData = attachment;
+    if (attachment?.file && typeof attachment.file.arrayBuffer === 'function') {
+      const buffer = await attachment.file.arrayBuffer();
+      const base64 = Buffer.from(buffer).toString('base64');
+      imageData = `data:${attachment.file.type};base64,${base64}`;
     }
 
-    const response = await client.responses.create({
-      // Pick a current multimodal model you have access to
-      model: process.env.OPENAI_MODEL ?? "gpt-5", // e.g. "gpt-4.1" or "gpt-4o"
-      input: [
-        {
-          role: "system",
-          content: [{ type: "text", text: systemPrompt }],
-        },
-        {
-          role: "user",
-          content: inputContent,
-        },
-      ],
-      response_format: { type: "json_schema", json_schema: productSchema },
-      // You can also set max_output_tokens if you expect a large list
-      // max_output_tokens: 2048,
-    });
+    // Extract product information from image using vision model
+    const productAnalysis = await replicate.run(
+      "salesforce/blip:2e1dddc8621f72155f24cf2e0adbde548458d3cab9f00c0139eea840d0ac4746",
+      {
+        input: {
+          image: imageData,
+          task: "image_captioning",
+          question: `Analyze this image and identify any products visible. For each product, provide: name, description, estimated price in AUD, and category. Format as JSON with products array.`
+        }
+      }
+    );
 
-    // With structured outputs, the SDK exposes a parsed result:
-    // @ts-expect-error: types may lag behind SDK; output_parsed is present at runtime
-    const parsed = response.output_parsed ?? null;
+    // Generate product images using Replicate's image generation model
+    const products = [];
+    
+    // Parse the analysis result or use fallback
+    let productList = [];
+    try {
+      if (typeof productAnalysis === 'string' && productAnalysis.includes('{')) {
+        const parsed = JSON.parse(productAnalysis);
+        productList = parsed.products || [];
+      }
+    } catch {
+      // Fallback to analyzing the user input for product ideas
+      productList = [
+        { name: 'Featured Product 1', description: 'High-quality item from the collection', category: 'Featured' },
+        { name: 'Featured Product 2', description: 'Premium selection for modern lifestyle', category: 'Featured' },
+        { name: 'Featured Product 3', description: 'Trendy and stylish product', category: 'Featured' }
+      ];
+    }
 
-    // Fallback if parsed is missing (defensive)
-    const raw =
-      // @ts-expect-error
-      response.output?.[0]?.content?.[0]?.text ??
-      // @ts-expect-error
-      response.output_text ??
-      null;
+    // Generate images for each product using Replicate
+    for (let i = 0; i < Math.min(productList.length, 6); i++) {
+      const product = productList[i];
+      
+      try {
+        // Generate product image using SDXL model
+        const imageOutput = await replicate.run(
+          "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
+          {
+            input: {
+              prompt: `Professional product photography of ${product.name || `product ${i + 1}`}: ${product.description || 'modern stylish item'}, white background, studio lighting, high quality, commercial photography, clean minimalist style`
+            }
+          }
+        );
 
-    const payload =
-      parsed ??
-      (raw ? JSON.parse(raw) : { items: [] });
+        const imageUrl = Array.isArray(imageOutput) ? imageOutput[0] : imageOutput;
 
-    return Response.json(payload, { status: 200 });
+        products.push({
+          id: (i + 1).toString(),
+          name: product.name || `Product ${i + 1}`,
+          price: product.price || `AUD ${(Math.random() * 100 + 20).toFixed(2)}`,
+          description: product.description || 'High-quality product with modern design',
+          category: product.category || 'Featured',
+          imageUrl: imageUrl || '/placeholder-product.jpg'
+        });
+      } catch (imageError) {
+        console.warn(`Failed to generate image for product ${i + 1}:`, imageError);
+        
+        products.push({
+          id: (i + 1).toString(),
+          name: product.name || `Product ${i + 1}`,
+          price: product.price || `AUD ${(Math.random() * 100 + 20).toFixed(2)}`,
+          description: product.description || 'High-quality product with modern design',
+          category: product.category || 'Featured',
+          imageUrl: '/placeholder-product.jpg'
+        });
+      }
+    }
 
-
+    return {
+      products,
+      totalProducts: products.length,
+      categories: [...new Set(products.map(p => p.category))]
+    };
 
   } catch (error) {
+    console.error('Error generating product catalogue:', error);
+    
+    // Fallback to mock data with generated images
+    const fallbackProducts = [
+      { name: 'Premium Sneakers', description: 'High-quality athletic footwear with modern design', category: 'Footwear' },
+      { name: 'Vintage Jacket', description: 'Stylish vintage-inspired outerwear', category: 'Clothing' },
+      { name: 'Smart Watch', description: 'Advanced fitness tracking and notifications', category: 'Electronics' }
+    ];
+
+    const products = [];
+    
+    for (let i = 0; i < fallbackProducts.length; i++) {
+      const product = fallbackProducts[i];
+      
+      try {
+        const imageOutput = await replicate.run(
+          "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
+          {
+            input: {
+              prompt: `Professional product photography of ${product.name}: ${product.description}, white background, studio lighting, high quality, commercial photography`
+            }
+          }
+        );
+
+        const imageUrl = Array.isArray(imageOutput) ? imageOutput[0] : imageOutput;
+
+        products.push({
+          id: (i + 1).toString(),
+          name: product.name,
+          price: (Math.random() * 100 + 50).toFixed(2),
+          description: product.description,
+          category: product.category,
+          imageUrl: imageUrl
+        });
+      } catch {
+        products.push({
+          id: (i + 1).toString(),
+          name: product.name,
+          price: (Math.random() * 100 + 50).toFixed(2),
+          description: product.description,
+          category: product.category,
+          imageUrl: '/mock-product.jpg'
+        });
+      }
+    }
+
     return {
-      products: [
-        {
-          id: '1',
-          name: 'Premium Sneakers',
-          price: 129.99,
-          description: 'High-quality athletic footwear with modern design',
-          category: 'Footwear',
-          imageUrl: '/mock-sneaker.jpg'
-        },
-        {
-          id: '2',
-          name: 'Vintage Jacket',
-          price: 89.99,
-          description: 'Stylish vintage-inspired outerwear',
-          category: 'Clothing',
-          imageUrl: '/mock-jacket.jpg'
-        },
-        {
-          id: '3',
-          name: 'Smart Watch',
-          price: 199.99,
-          description: 'Advanced fitness tracking and notifications',
-          category: 'Electronics',
-          imageUrl: '/mock-watch.jpg'
-        }
-      ],
-      totalProducts: 3,
+      products,
+      totalProducts: products.length,
       categories: ['Footwear', 'Clothing', 'Electronics']
     };
   }
